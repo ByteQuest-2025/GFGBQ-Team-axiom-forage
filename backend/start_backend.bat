@@ -1,4 +1,5 @@
 @echo off
+cd /d "%~dp0"
 echo Starting Backend Initialization...
 python -m pip install -r requirements.txt
 python train_and_init.py

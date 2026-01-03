@@ -1,61 +1,56 @@
-import pandas as pd
-import numpy as np
 import sys
-import os
 from pathlib import Path
-from datetime import datetime, timedelta
 
-# Ensure we can import backend imports
-sys.path.append(str(Path(__file__).parent))
+# Ensure paths are set up correctly
+base_dir = Path(__file__).resolve().parent
+sys.path.append(str(base_dir))
 
-# Import EmergencyModel (assuming it handles relative imports correctly now)
+# Import specific modules
 try:
     from app.models.emergency_model import EmergencyModel
+    from app.utils.preprocessing import DataPreprocessor
 except ImportError:
-    # Fallback if running from backend/ directly
-    sys.path.append(str(Path(__file__).parent))
+    # Fallback to local import if structure differs
+    sys.path.append(str(base_dir.parent))
     from app.models.emergency_model import EmergencyModel
-
-def generate_synthetic_data(output_path):
-    print("Generating synthetic data for demonstration...")
-    dates = pd.date_range(end=datetime.now(), periods=365)
-    
-    data = []
-    for date in dates:
-        # Simple seasonality
-        base_visits = 50
-        weekend_factor = 1.2 if date.weekday() >= 5 else 1.0
-        random_noise = np.random.randint(-10, 15)
-        visits = int(base_visits * weekend_factor + random_noise)
-        
-        data.append({
-            'date': date,
-            'Emergency_Visits': max(0, visits),
-            'Patient Admission Flag': np.random.choice([0, 1], p=[0.7, 0.3]) # Dummy
-        })
-        
-    df = pd.DataFrame(data)
-    
-    # Save to processed directly as the model expects 'Emergency_Visits' and 'date'
-    # Actually model expects 'Emergency_Visits' and date for sorting
-    
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(output_path, index=False)
-    print(f"Synthetic data saved to {output_path}")
-    return df
+    from app.utils.preprocessing import DataPreprocessor
 
 if __name__ == "__main__":
-    base_dir = Path(__file__).parent
-    processed_data_path = base_dir / 'data' / 'processed' / 'processed_hospital_data.csv'
+    print("--- Starting Backend Initialization ---")
     
+    # 1. Define Paths
+    raw_data_path = base_dir / 'data' / 'raw' / 'enhanced_hospital_data.csv'
+    processed_data_path = base_dir / 'data' / 'processed' / 'enhanced_processed_hospital_data.csv'
+    
+    # Ensure directories exist
+    raw_data_path.parent.mkdir(parents=True, exist_ok=True)
+    processed_data_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    # 2. Check Data
+    # If the processed data doesn't exist, we generate it using the robust Preprocessor
     if not processed_data_path.exists():
-        print(f"Processed data not found at {processed_data_path}.")
-        generate_synthetic_data(processed_data_path)
+        print("Processed data not found. Running Data Preprocessor...")
+        
+        # Create a dummy raw file if it doesn't exist, just to satisfy the preprocessor
+        if not raw_data_path.exists():
+            print("Creating dummy raw data to bootstrap the system...")
+            import pandas as pd
+            dates = pd.date_range(start='2024-01-01', periods=365)
+            df = pd.DataFrame({'date': dates})
+            df.to_csv(raw_data_path, index=False)
+            
+        preprocessor = DataPreprocessor()
+        preprocessor.enhance_historical_data(str(raw_data_path), str(processed_data_path))
+    else:
+        print(f"✅ Found existing processed data at {processed_data_path}")
     
+    # 3. Train Model
     print("Initializing model training...")
     try:
         model = EmergencyModel()
-        model.train(processed_data_path)
-        print("Model training completed successfully!")
+        model.train(str(processed_data_path))
+        print("✅ Model training completed successfully!")
     except Exception as e:
-        print(f"Model training failed: {e}")
+        print(f"❌ Model training failed: {e}")
+        import traceback
+        traceback.print_exc()
