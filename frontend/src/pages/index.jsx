@@ -20,6 +20,7 @@ export default function Dashboard() {
             console.error("Fetch error:", error);
         }
         setLoading(false);
+
     };
 
     useEffect(() => { fetchData(); }, []);
@@ -97,3 +98,5 @@ export default function Dashboard() {
         </div>
     );
 }
+
+// hi i doesnt change 
