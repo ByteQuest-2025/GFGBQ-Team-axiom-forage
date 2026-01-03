@@ -14,6 +14,7 @@ class DataPreprocessor:
         TRANSFORMATION STEP:
         Converts a simple date/visit CSV into the professional 
         Enhanced Dataset with Internal Stress & External Pressure.
+        Generates all 11 features for the ML contract.
         """
         df = pd.read_csv(raw_csv_path)
         df['date'] = pd.to_datetime(df['date'])
@@ -25,8 +26,8 @@ class DataPreprocessor:
         df['icu_total'] = self.icu_capacity
         df['icu_occupied'] = np.random.randint(15, 39, size=n)
         df['icu_occupancy_pct'] = (df['icu_occupied'] / df['icu_total']).round(2)
+        df['daily_patients'] = np.random.randint(80, 200, size=n)  # ER daily arrivals
         df['staff_on_duty'] = np.random.randint(8, 16, size=n)
-        # df['daily_patients'] removed as per request
         
         # Binary status for supply chain
         df['oxygen_low'] = np.random.choice([0, 1], size=n, p=[0.9, 0.1])
@@ -61,10 +62,11 @@ class DataPreprocessor:
         """
         INFERENCE STEP:
         Used by the API to glue real-time DB data with API context 
-        to create the vector the ML model expects.
+        to create the vector the ML model expects (11 features).
         """
         vector = {
             "icu_occupancy_pct": hospital_data['icu_occupied'] / hospital_data['icu_total'],
+            "daily_patients": hospital_data['daily_patients'],
             "staff_on_duty": hospital_data['staff_on_duty'],
             "oxygen_low": 1 if hospital_data['oxygen_status'] == 'low' else 0,
             "medicine_low": 1 if hospital_data['medicine_status'] == 'low' else 0,
@@ -84,8 +86,8 @@ if __name__ == "__main__":
     # We want to reach: backend/data/processed/
     base_dir = Path(__file__).resolve().parent.parent.parent # Points to 'backend' dir
     
-    raw_path = base_dir / 'data' / 'processed' / 'enhanced_hospital_data_v1.csv'
-    processed_path = base_dir / 'data' / 'processed' / 'enhanced_processed_hospital_data_v1.csv'
+    raw_path = base_dir / 'data' / 'raw' / 'enhanced_hospital_data.csv'
+    processed_path = base_dir / 'data' / 'processed' / 'enhanced_processed_hospital_data.csv'
     
     # Ensure directories exist
     processed_path.parent.mkdir(parents=True, exist_ok=True)
