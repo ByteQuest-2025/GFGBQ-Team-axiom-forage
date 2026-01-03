@@ -1,40 +1,50 @@
 import urllib.request
 import json
 import sys
+import time
 
 # Ensure this matches the port in your main.py
 BASE_URL = "http://127.0.0.1:8001"
 
-def check_endpoint(endpoint, name):
+def check_endpoint(endpoint, name, retries=5, delay=2):
     url = f"{BASE_URL}{endpoint}"
     print(f"Checking {name} at {url}...")
-    try:
-        with urllib.request.urlopen(url) as response:
-            status_code = response.getcode()
-            if status_code == 200:
-                data = json.load(response)
-                
-                # Logic to verify the NEW Professional Contract
-                if endpoint == "/api/v1/dashboard":
-                    # Check if the new structure exists
-                    if "data" in data and "risk_analysis" in data["data"]:
-                        print(f"✅ {name}: SUCCESS (New Data Contract Verified)")
-                        print(f"   -> Risk Score: {data['data']['risk_analysis']['score']}%")
-                        print(f"   -> Alert: {data['data']['risk_analysis']['alert_level']}")
-                        print(f"   -> Beds Needed: {data['data']['resource_requirements']['beds_to_prepare']}")
+    
+    for attempt in range(retries):
+        try:
+            with urllib.request.urlopen(url) as response:
+                status_code = response.getcode()
+                if status_code == 200:
+                    data = json.load(response)
+                    
+                    # Logic to verify the NEW Professional Contract
+                    if endpoint == "/api/v1/dashboard":
+                        # Check if the new structure exists
+                        if "data" in data and "risk_analysis" in data["data"]:
+                            print(f"✅ {name}: SUCCESS (New Data Contract Verified)")
+                            print(f"   -> Risk Score: {data['data']['risk_analysis']['score']}%")
+                            print(f"   -> Alert: {data['data']['risk_analysis']['alert_level']}")
+                            print(f"   -> Beds Needed: {data['data']['resource_requirements']['beds_to_prepare']}")
+                        else:
+                            print(f"❌ {name}: FAILED (Missing 'risk_analysis' or 'resource_requirements')")
+                            return False
                     else:
-                        print(f"❌ {name}: FAILED (Missing 'risk_analysis' or 'resource_requirements')")
-                        return False
+                        print(f"✅ {name}: SUCCESS")
+                    
+                    return True
                 else:
-                    print(f"✅ {name}: SUCCESS")
-                
-                return True
+                    print(f"❌ {name}: FAILED (Status Code: {status_code})")
+                    return False
+        except urllib.error.URLError:
+            if attempt < retries - 1:
+                print(f"   ⏳ Connection refused. Retrying in {delay}s... ({attempt + 1}/{retries})")
+                time.sleep(delay)
             else:
-                print(f"❌ {name}: FAILED (Status Code: {status_code})")
+                print(f"❌ {name}: Connection Failed after {retries} attempts.")
                 return False
-    except Exception as e:
-        print(f"❌ {name}: ERROR: {e}")
-        return False
+        except Exception as e:
+            print(f"❌ {name}: ERROR: {e}")
+            return False
 
 def run_tests():
     print("--- Axiom Forage Intelligence System: Backend Verification ---")
