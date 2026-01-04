@@ -1,5 +1,5 @@
 # GFGBQ-Team-axiom-forage
-<<<<<<< HEAD
+
 
 ## 1. Problem Statement
 Hospitals face significant challenges in managing resources during unexpected surges in patient volume, often driven by external factors like weather events, seasonal illnesses, and public festivals. These surges can lead to shortages in critical resources such as oxygen, medicine, and staff, as well as overcrowding in ICU and ER departments. The lack of predictive insights makes it difficult for hospital administrators to proactively allocate resources and mitigate risks.
