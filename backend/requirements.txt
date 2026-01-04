@@ -2,7 +2,9 @@
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 pydantic==2.5.2
+pydantic-settings==2.1.0
 python-multipart==0.0.6
+httpx==0.26.0
 
 # Data Processing & Machine Learning
 pandas==2.1.3

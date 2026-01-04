@@ -32,11 +32,27 @@ class HospitalResponse(BaseModel):
     email: str
     hospital_name: str
     location: Optional[str]
+    role: str
+    services: list = []
+    timings: dict = {}
     icu_total_capacity: int
+    
+    # Resource Stats
+    daily_patients: int = 0
+    staff_on_duty: int = 0
+    oxygen_status: str = "Normal"
+    medicine_status: str = "Normal"
+    
     is_active: bool
     
     class Config:
         from_attributes = True
+
+class HospitalStatusUpdate(BaseModel):
+    daily_patients: Optional[int] = None
+    staff_on_duty: Optional[int] = None
+    oxygen_status: Optional[str] = None
+    medicine_status: Optional[str] = None
 
 
 # --- Prediction Schemas ---

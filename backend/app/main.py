@@ -142,8 +142,8 @@ async def root(db: Session = Depends(get_db)):
         "system": "Axiom Forage HealthAI - Production",
         "version": "2.0.0",
         "timestamp": datetime.now().isoformat(),
-        "database": db_status,
-        "ml_model": model_status
+        "database_status": db_status,
+        "ml_model_status": model_status
     }
 
 
@@ -160,31 +160,103 @@ async def get_dashboard(
     try:
         service = ForecastService(ml_model)
         
+        # 1. Get Today's Prediction & Context
+        # Defensive coding: Handle None values from DB
+        daily_patients = current_hospital.daily_patients or 0
+        icu_total = current_hospital.icu_total_capacity or 40
+        staff_on_duty = current_hospital.staff_on_duty or 0
+        oxygen_status_raw = current_hospital.oxygen_status or "Normal"
+        medicine_status_raw = current_hospital.medicine_status or "Normal"
+        
+        # Lowercase for ML model logic
+        oxygen_status = oxygen_status_raw.lower()
+        medicine_status = medicine_status_raw.lower()
+
         hospital_data = {
-            "icu_occupied": 34,
-            "icu_total": current_hospital.icu_total_capacity,
-            "daily_patients": 125,
-            "staff_on_duty": 10,
-            "oxygen_status": "normal",
-            "medicine_status": "low"
+            "icu_occupied": daily_patients, 
+            "icu_total": icu_total,
+            "daily_patients": daily_patients,
+            "staff_on_duty": staff_on_duty,
+            "oxygen_status": oxygen_status,
+            "medicine_status": medicine_status
         }
 
         backend_context = await service.assemble_backend_context(db)
-        result = await service.get_predictions_and_resources(
+        prediction_result = await service.get_predictions_and_resources(
             hospital_data, 
             backend_context,
             current_hospital.id,
             db
         )
         
+        # 2. Fetch History for Chart (Last 7 days)
+        from app.models.prediction import Prediction
+        history = db.query(Prediction).filter(
+            Prediction.hospital_id == current_hospital.id
+        ).order_by(Prediction.date.desc()).limit(7).all()
+        
+        # Format Forecast (Chart Data)
+        forecast_data = []
+        
+        # We need to show trend, so we reverse history (oldest to newest)
+        # If no history, we will just have today's prediction added below
+        for p in reversed(history):
+            # Estimate counts based on stored percentages (approximate)
+            base_patients = daily_patients
+            est_visits = int(base_patients * (1 + p.er_surge_pct))
+            est_icu = int(icu_total * (1 + p.icu_surge_pct) * 0.8) # Approx
+            
+            forecast_data.append({
+                "day_name": p.date.strftime("%a"), # Mon, Tue
+                "emergency_visits": est_visits,
+                "icu_demand": est_icu,
+                "date": p.date.isoformat()
+            })
+            
+        # Ensure at least today is in forecast if history was empty or didn't include today yet
+        if not any(f['date'] == datetime.now().date().isoformat() for f in forecast_data):
+             # Parse percentage string "+5.0%" -> 0.05
+             er_surge_str = prediction_result["risk_analysis"]["er_surge_prediction"].strip('%+')
+             er_surge_val = float(er_surge_str) / 100.0 if er_surge_str else 0.0
+             
+             est_visits = int(daily_patients * (1 + er_surge_val))
+             
+             forecast_data.append({
+                "day_name": "Today",
+                "emergency_visits": est_visits,
+                "icu_demand": int(icu_total * 0.5), # Placeholder
+                "date": datetime.now().date().isoformat()
+            })
+
+        # 3. Construct Frontend-Compatible Response
+        # Parse percentage string for predicted_visits calculation
+        er_surge_str = prediction_result["risk_analysis"]["er_surge_prediction"].strip('%+')
+        er_surge_val = float(er_surge_str) / 100.0 if er_surge_str else 0.0
+        
+        response_data = {
+            "summary": {
+                "alert_level": prediction_result["risk_analysis"]["alert_level"],
+                "daily_patients": daily_patients,
+                "staff_on_duty": staff_on_duty,
+                "oxygen_status": oxygen_status_raw,
+                "medicine_status": medicine_status_raw,
+                "predicted_workload": prediction_result["risk_analysis"]["score"], # Risk Score
+                "icu_occupied": daily_patients, # Proxy
+                "icu_total": icu_total,
+                "predicted_visits": int(daily_patients * (1 + er_surge_val))
+            },
+            "forecast": forecast_data,
+            "recommendations": prediction_result["recommendations"]
+        }
+        
         return {
             "success": True,
-            "data": result
+            "data": response_data
         }
 
     except Exception as e:
         logger.error(f"Dashboard Error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal error")
+        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
 
 
 # --- Prediction History (PROTECTED) ---
@@ -219,6 +291,7 @@ async def get_prediction_history(
             for pred in predictions
         ]
     }
+
 
 
 # --- Run Server ---

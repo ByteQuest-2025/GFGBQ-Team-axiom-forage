@@ -3,7 +3,7 @@ Hospital model for multi-tenant authentication.
 Each hospital has separate credentials and predictions.
 """
 
-from sqlalchemy import Column, Integer, String, Boolean, DateTime
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -21,9 +21,18 @@ class Hospital(Base):
     # Hospital Details
     hospital_name = Column(String, nullable=False)
     location = Column(String, nullable=True)
+    role = Column(String, default="hospital") # admin or hospital
+    services = Column(JSON, default=[]) # List of services
+    timings = Column(JSON, default={}) # Operating hours
     
     # Capacity Info (for context)
     icu_total_capacity = Column(Integer, default=40)
+    
+    # Real-time Resource Stats
+    daily_patients = Column(Integer, default=0)
+    staff_on_duty = Column(Integer, default=0)
+    oxygen_status = Column(String, default="Normal") # Normal, Low, Critical
+    medicine_status = Column(String, default="Normal") # Normal, Low, Critical
     
     # Status
     is_active = Column(Boolean, default=True)

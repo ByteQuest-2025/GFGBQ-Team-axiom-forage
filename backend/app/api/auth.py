@@ -8,7 +8,7 @@ from datetime import timedelta
 
 from app.database import get_db
 from app.models.hospital import Hospital
-from app.schemas.auth import HospitalRegister, HospitalLogin, Token, HospitalResponse
+from app.schemas.auth import HospitalRegister, HospitalLogin, Token, HospitalResponse, HospitalStatusUpdate
 from app.auth.security import get_password_hash, verify_password, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
 from app.auth.dependencies import get_current_hospital
 
@@ -89,7 +89,10 @@ def login_hospital(credentials: HospitalLogin, db: Session = Depends(get_db)):
     # Create access token
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": hospital.email},
+        data={
+            "sub": hospital.email,
+            "role": hospital.role
+        },
         expires_delta=access_token_expires
     )
     
@@ -107,4 +110,33 @@ def get_current_hospital_profile(current_hospital: Hospital = Depends(get_curren
     Returns:
         Hospital profile
     """
+    return current_hospital
+
+
+@router.post("/status/update", response_model=HospitalResponse)
+def update_hospital_status(
+    status_update: HospitalStatusUpdate,
+    current_hospital: Hospital = Depends(get_current_hospital),
+    db: Session = Depends(get_db)
+):
+    """
+    Update hospital resource status (Manager only).
+    """
+    if current_hospital.role != "hospital":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only hospital managers can update status"
+        )
+    
+    if status_update.daily_patients is not None:
+        current_hospital.daily_patients = status_update.daily_patients
+    if status_update.staff_on_duty is not None:
+        current_hospital.staff_on_duty = status_update.staff_on_duty
+    if status_update.oxygen_status is not None:
+        current_hospital.oxygen_status = status_update.oxygen_status
+    if status_update.medicine_status is not None:
+        current_hospital.medicine_status = status_update.medicine_status
+        
+    db.commit()
+    db.refresh(current_hospital)
     return current_hospital

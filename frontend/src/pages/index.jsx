@@ -1,99 +1,154 @@
-// Main Dashboard Page
-import React, { useEffect, useState } from 'react';
-import { Activity, Users, Bed, BrainCircuit, RefreshCw } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import RiskAlert from '../components/RiskAlert';
-import WorkloadGauge from '../components/WorkloadGauge';
-import RecommendationBox from '../components/RecommendationBox';
+import React, { useState } from 'react';
+import { BrainCircuit, Activity, Shield, ArrowRight, CheckCircle2 } from 'lucide-react';
+import LoginModal from '../components/LoginModal';
+import { useAuth } from '../context/AuthContext';
+import { useRouter } from 'next/router';
 
-export default function Dashboard() {
-    const [data, setData] = useState(null);
-    const [loading, setLoading] = useState(true);
+export default function LandingPage() {
+    const [isLoginOpen, setIsLoginOpen] = useState(false);
+    const { user, isAuthenticated } = useAuth();
+    const router = useRouter();
 
-    const fetchData = async () => {
-        setLoading(true);
-        try {
-            const response = await fetch('http://127.0.0.1:8001/api/v1/dashboard');
-            const result = await response.json();
-            setData(result.data);
-        } catch (error) {
-            console.error("Fetch error:", error);
+    const handleDashboardClick = () => {
+        if (user?.role === 'admin') {
+            router.push('/admin/dashboard');
+        } else {
+            router.push('/hospital/dashboard');
         }
-        setLoading(false);
     };
 
-    useEffect(() => { fetchData(); }, []);
-
-    if (loading) return (
-        <div className="flex flex-col h-screen items-center justify-center bg-slate-900 text-white">
-            <RefreshCw className="animate-spin w-12 h-12 mb-4 text-blue-400" />
-            <p className="text-xl font-medium">Syncing with Hospital Intelligence System...</p>
-        </div>
-    );
-
     return (
-        <div className="min-h-screen bg-slate-50">
-            {/* Navigation Bar */}
-            <nav className="bg-white border-b px-8 py-4 flex justify-between items-center sticky top-0 z-10">
-                <div className="flex items-center gap-2">
-                    <div className="bg-blue-600 p-2 rounded-lg"><BrainCircuit className="text-white" /></div>
-                    <h1 className="text-xl font-bold text-slate-800 tracking-tight">AxiomForage <span className="text-blue-600">HealthAI</span></h1>
+        <div className="min-h-screen bg-slate-50 font-sans">
+            {/* Navigation */}
+            <nav className="bg-white/80 backdrop-blur-md border-b border-slate-200 sticky top-0 z-40">
+                <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                        <div className="bg-blue-600 p-2 rounded-lg shadow-lg shadow-blue-200">
+                            <BrainCircuit className="text-white w-6 h-6" />
+                        </div>
+                        <span className="text-xl font-bold text-slate-800 tracking-tight">
+                            AxiomForage <span className="text-blue-600">HealthAI</span>
+                        </span>
+                    </div>
+                    
+                    <div className="flex items-center gap-4">
+                        {isAuthenticated ? (
+                            <button 
+                                onClick={handleDashboardClick}
+                                className="bg-slate-900 hover:bg-slate-800 text-white px-5 py-2.5 rounded-lg font-medium transition-all flex items-center gap-2"
+                            >
+                                Go to Dashboard <ArrowRight className="w-4 h-4" />
+                            </button>
+                        ) : (
+                            <button 
+                                onClick={() => setIsLoginOpen(true)}
+                                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-medium transition-all shadow-lg shadow-blue-200 hover:shadow-blue-300"
+                            >
+                                Login
+                            </button>
+                        )}
+                    </div>
                 </div>
-                <button onClick={fetchData} className="flex items-center gap-2 text-sm bg-slate-100 hover:bg-slate-200 px-4 py-2 rounded-md transition-all">
-                    <RefreshCw className="w-4 h-4" /> Refresh Data
-                </button>
             </nav>
 
-            <main className="p-8 max-w-[1600px] mx-auto space-y-8">
-                {/* TOP ROW: Global Alert Status (Feature 4) */}
-                <RiskAlert level={data.summary.alert_level} />
+            {/* Hero Section */}
+            <main className="max-w-7xl mx-auto px-6 py-20 lg:py-32">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+                    <div className="space-y-8">
+                        <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-full text-sm font-medium border border-blue-100">
+                            <Activity className="w-4 h-4" /> AI-Powered Hospital Management
+                        </div>
+                        
+                        <h1 className="text-5xl lg:text-6xl font-bold text-slate-900 leading-tight">
+                            Predictive Intelligence for <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600">Critical Care</span>
+                        </h1>
+                        
+                        <p className="text-xl text-slate-600 leading-relaxed">
+                            Optimize ER and ICU resources with real-time predictive analytics. 
+                            Anticipate patient surges, manage staff allocation, and ensure 
+                            operational readiness before the crisis hits.
+                        </p>
 
-                {/* SECOND ROW: Key Metrics & Chart */}
-                <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-
-                    {/* Feature 3: Workload Gauge */}
-                    <div className="lg:col-span-1 space-y-6">
-                        <WorkloadGauge value={data.summary.predicted_workload} label="Staff Pressure Index" />
-
-                        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-                            <div className="flex items-center gap-3 text-slate-500 mb-2">
-                                <Users size={20} /> <span className="text-sm font-semibold">Predicted Arrivals</span>
-                            </div>
-                            <div className="text-3xl font-bold">{data.summary.predicted_visits} <span className="text-sm font-normal text-slate-400">Patients</span></div>
+                        <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                            <button 
+                                onClick={() => setIsLoginOpen(true)}
+                                className="px-8 py-4 bg-slate-900 text-white rounded-xl font-bold text-lg hover:bg-slate-800 transition-all shadow-xl hover:shadow-2xl hover:-translate-y-1 flex items-center justify-center gap-2"
+                            >
+                                Get Started <ArrowRight className="w-5 h-5" />
+                            </button>
+                            <button className="px-8 py-4 bg-white text-slate-700 border border-slate-200 rounded-xl font-bold text-lg hover:bg-slate-50 transition-all flex items-center justify-center gap-2">
+                                View Demo
+                            </button>
                         </div>
 
-                        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-                            <div className="flex items-center gap-3 text-slate-500 mb-2">
-                                <Bed size={20} /> <span className="text-sm font-semibold">ICU Bed Demand</span>
+                        <div className="pt-8 grid grid-cols-2 gap-6">
+                            <div className="flex items-center gap-3 text-slate-600">
+                                <CheckCircle2 className="text-green-500 w-5 h-5" /> 94% Accuracy
                             </div>
-                            <div className="text-3xl font-bold">{data.forecast[0].icu_demand} <span className="text-sm font-normal text-slate-400">Beds</span></div>
+                            <div className="flex items-center gap-3 text-slate-600">
+                                <CheckCircle2 className="text-green-500 w-5 h-5" /> Real-time Sync
+                            </div>
+                            <div className="flex items-center gap-3 text-slate-600">
+                                <CheckCircle2 className="text-green-500 w-5 h-5" /> HIPAA Compliant
+                            </div>
+                            <div className="flex items-center gap-3 text-slate-600">
+                                <CheckCircle2 className="text-green-500 w-5 h-5" /> 24/7 Monitoring
+                            </div>
                         </div>
                     </div>
 
-                    {/* Feature 1 & 2: Forecasting Chart */}
-                    <div className="lg:col-span-3 bg-white p-6 rounded-xl border border-slate-200 shadow-sm min-h-[450px]">
-                        <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-                            <Activity className="text-blue-600" /> 7-Day Predictive Load Analysis
-                        </h3>
-                        <ResponsiveContainer width="100%" height="90%">
-                            <LineChart data={data.forecast}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                <XAxis dataKey="day_name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
-                                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
-                                <Tooltip
-                                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
-                                />
-                                <Legend iconType="circle" verticalAlign="top" align="right" height={36} />
-                                <Line name="ER Admissions" type="monotone" dataKey="emergency_visits" stroke="#2563eb" strokeWidth={4} dot={{ r: 6, fill: '#2563eb' }} activeDot={{ r: 8 }} />
-                                <Line name="ICU Demand" type="monotone" dataKey="icu_demand" stroke="#ef4444" strokeWidth={4} dot={{ r: 6, fill: '#ef4444' }} activeDot={{ r: 8 }} />
-                            </LineChart>
-                        </ResponsiveContainer>
+                    <div className="relative">
+                        <div className="absolute -inset-4 bg-gradient-to-r from-blue-100 to-purple-100 rounded-full blur-3xl opacity-50 animate-pulse-slow"></div>
+                        <div className="relative bg-white p-8 rounded-3xl shadow-2xl border border-slate-100">
+                            <div className="flex items-center justify-between mb-8">
+                                <div className="space-y-1">
+                                    <h3 className="font-bold text-slate-800">Live System Status</h3>
+                                    <p className="text-sm text-slate-500">Apollo Jubilee Hills</p>
+                                </div>
+                                <div className="flex items-center gap-2 px-3 py-1 bg-green-50 text-green-700 rounded-full text-xs font-bold border border-green-100">
+                                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                                    OPERATIONAL
+                                </div>
+                            </div>
+                            
+                            <div className="space-y-6">
+                                <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
+                                    <div className="flex justify-between text-sm mb-2">
+                                        <span className="text-slate-500">ICU Occupancy</span>
+                                        <span className="font-bold text-slate-800">82%</span>
+                                    </div>
+                                    <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
+                                        <div className="h-full bg-amber-500 w-[82%]"></div>
+                                    </div>
+                                </div>
+
+                                <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
+                                    <div className="flex justify-between text-sm mb-2">
+                                        <span className="text-slate-500">ER Wait Time</span>
+                                        <span className="font-bold text-slate-800">12 min</span>
+                                    </div>
+                                    <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
+                                        <div className="h-full bg-blue-500 w-[30%]"></div>
+                                    </div>
+                                </div>
+
+                                <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
+                                    <div className="flex justify-between text-sm mb-2">
+                                        <span className="text-slate-500">Staff Availability</span>
+                                        <span className="font-bold text-slate-800">High</span>
+                                    </div>
+                                    <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
+                                        <div className="h-full bg-green-500 w-[90%]"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
-
-                {/* THIRD ROW: Feature 5: Actionable Recommendations */}
-                <RecommendationBox recommendations={data.recommendations} alertLevel={data.summary.alert_level} />
             </main>
+
+            {/* Login Modal */}
+            <LoginModal isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} />
         </div>
     );
 }
