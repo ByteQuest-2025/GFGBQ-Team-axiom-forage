@@ -22,10 +22,11 @@ Members:
 (Optional)
 
 ## 5. Demonstration Video
-[Link to 2-minute video placeholder]
+[Link to 3-minute video placeholder]
+https://drive.google.com/file/d/1WPJtIrb5EeRn_3XMFFiwF6ENoo79Ec-c/view?usp=drivesdk
 
 ## 6. Presentation
-[Link to PPT placeholder]
+https://docs.google.com/presentation/d/1rY67HnaZeJCKZ4R2bS3_CSN1qIZ30k9C/edit?usp=drivesdk&ouid=116628029549493605793&rtpof=true&sd=true
 
 # Project Overview
 **Axiom Forage** is a comprehensive predictive modeling solution designed to help hospitals anticipate resource shortages and patient surges. By leveraging historical hospital data and external environmental factors (weather, festivals, etc.), the system provides actionable insights to optimize ICU and ER allocation, ensuring better patient outcomes and operational resilience.
@@ -33,6 +34,7 @@ Members:
 # Setup and Installation
 
 ### Prerequisites
+
 - **Python 3.9+**
 - **Node.js & npm**
 
@@ -83,5 +85,8 @@ Members:
 
 # Screenshots
 *(Placeholders for future screenshots)*
-![Dashboard Overview](placeholder-image-url)
-![Risk Analysis](placeholder-image-url)
+Landing page : https://drive.google.com/file/d/1W7VKAV1hCQZ8W7uF9JUU_B1jfkcDmJ5n/view?usp=sharing
+
+Dashboard : https://drive.google.com/file/d/1wqM4GxbmWhEyR2MAMOf8naK457V0fL1y/view?usp=sharing
+
+![Risk Analysis](placeholder-image-url) : https://drive.google.com/file/d/1ID8oQBtEwKvOj-l5vr59oZiCjW6KJ095/view?usp=sharing

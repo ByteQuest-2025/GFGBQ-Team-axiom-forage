@@ -27,6 +27,7 @@ export const AuthProvider = ({ children }) => {
             if (response.ok) {
                 const userData = await response.json();
                 setUser(userData);
+                setLoading(false);
                 return userData;
             } else {
                 logout();
