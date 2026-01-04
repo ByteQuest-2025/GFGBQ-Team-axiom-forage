@@ -7,7 +7,7 @@ Hospitals face significant challenges in managing resources during unexpected su
 This project aims to solve this by deploying an AI-driven predictive model that analyzes internal hospital data (occupancy, inventory) and external environmental factors to forecast stress levels, risk scores, and potential increases in patient influx. This enables proactive decision-making to ensure optimal patient care and operational efficiency.
 
 ## 2. Project Name
-**Axiom Forage**
+**Predictive AI Hospital Resource Managenment**
 
 
 ## 3. Team Name
