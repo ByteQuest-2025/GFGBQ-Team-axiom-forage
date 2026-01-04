@@ -1,10 +1,11 @@
 // Main Dashboard Page
 import React, { useEffect, useState } from 'react';
-import { Activity, Users, Bed, BrainCircuit, RefreshCw, TrendingUp } from 'lucide-react';
+import { Activity, Users, Bed, BrainCircuit, RefreshCw, TrendingUp, Stethoscope, Wind, Pill, HeartPulse } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import RiskAlert from '../../components/RiskAlert';
 import WorkloadGauge from '../../components/WorkloadGauge';
 import ResourceUpdatePanel from '../../components/ResourceUpdatePanel';
+import RecommendationBox from '../../components/RecommendationBox';
 import ProtectedRoute from '../../components/ProtectedRoute';
 import { useAuth } from '../../context/AuthContext';
 import { useRouter } from 'next/router';
@@ -26,20 +27,24 @@ export default function Dashboard() {
                     'Authorization': `Bearer ${token}`
                 }
             });
+
             if (!response.ok) {
                 if (response.status === 401) {
                     logout();
                     return;
                 }
-                throw new Error(`HTTP error! status: ${response.status}`);
+                const errorText = await response.text();
+                console.error("Backend Error Details:", errorText);
+                throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
             }
             const result = await response.json();
             setData(result.data);
         } catch (error) {
             console.error("Fetch error:", error);
             setError("Failed to connect to the Hospital Intelligence System. Please ensure the backend is running.");
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     useEffect(() => { fetchData(); }, []);
@@ -122,47 +127,76 @@ export default function Dashboard() {
                         />
                     )}
 
+                    {/* Feature 5: Predicted Arrivals (Moved here) */}
+                    {/* Feature 5: Key Metrics Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {/* Predicted Arrivals */}
+                        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
+                            <div className="p-3 bg-blue-50 rounded-lg">
+                                <Users className="w-8 h-8 text-blue-600" />
+                            </div>
+                            <div>
+                                <div className="text-3xl font-bold text-slate-800">{data.summary.predicted_visits}</div>
+                                <div className="text-sm text-slate-500 font-medium">Predicted Arrivals</div>
+                            </div>
+                        </div>
+
+                        {/* ICU Occupancy */}
+                        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
+                            <div className="p-3 bg-red-50 rounded-lg">
+                                <Bed className="w-8 h-8 text-red-600" />
+                            </div>
+                            <div className="flex-1">
+                                <div className="text-3xl font-bold text-slate-800">{data.summary.icu_occupied} <span className="text-sm text-slate-400 font-normal">/ {data.summary.icu_total}</span></div>
+                                <div className="text-sm text-slate-500 font-medium">ICU Occupancy</div>
+                                <div className="w-full bg-slate-100 h-1.5 rounded-full mt-2 overflow-hidden">
+                                    <div 
+                                        className={`h-full rounded-full ${data.summary.icu_occupied / data.summary.icu_total > 0.8 ? 'bg-red-500' : 'bg-blue-500'}`} 
+                                        style={{ width: `${Math.min((data.summary.icu_occupied / data.summary.icu_total) * 100, 100)}%` }}
+                                    ></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Staff on Duty */}
+                        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
+                            <div className="p-3 bg-emerald-50 rounded-lg">
+                                <Stethoscope className="w-8 h-8 text-emerald-600" />
+                            </div>
+                            <div>
+                                <div className="text-3xl font-bold text-slate-800">{data.summary.staff_on_duty}</div>
+                                <div className="text-sm text-slate-500 font-medium">Staff on Duty</div>
+                            </div>
+                        </div>
+
+                        {/* Supplies Status */}
+                        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-center gap-3">
+                            <div className="flex justify-between items-center">
+                                <div className="flex items-center gap-2">
+                                    <Wind className="w-4 h-4 text-slate-400" />
+                                    <span className="text-sm font-medium text-slate-600">Oxygen</span>
+                                </div>
+                                <StatusBadge status={data.summary.oxygen_status} />
+                            </div>
+                            <div className="flex justify-between items-center">
+                                <div className="flex items-center gap-2">
+                                    <Pill className="w-4 h-4 text-slate-400" />
+                                    <span className="text-sm font-medium text-slate-600">Medicine</span>
+                                </div>
+                                <StatusBadge status={data.summary.medicine_status} />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Feature 5: Actionable Recommendations (Moved here) */}
+                    <RecommendationBox recommendations={data.recommendations} alertLevel={data.summary.alert_level} />
+
                     {/* SECOND ROW: Key Metrics & Chart */}
                     <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
 
-                        {/* Feature 3: Workload Gauge & Stats */}
+                        {/* Feature 3: Workload Gauge (Restored) */}
                         <div className="lg:col-span-1 space-y-6">
                             <WorkloadGauge value={data.summary.predicted_workload} label="Staff Pressure Index" />
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                                    <div className="text-xs font-semibold text-slate-500 uppercase mb-1">ICU Occupancy</div>
-                                    <div className="text-2xl font-bold text-slate-800">{data.summary.icu_occupied} <span className="text-xs text-slate-400 font-normal">/ {data.summary.icu_total}</span></div>
-                                    <div className="w-full bg-slate-100 h-1.5 rounded-full mt-2 overflow-hidden">
-                                        <div 
-                                            className={`h-full rounded-full ${data.summary.icu_occupied / data.summary.icu_total > 0.8 ? 'bg-red-500' : 'bg-blue-500'}`} 
-                                            style={{ width: `${Math.min((data.summary.icu_occupied / data.summary.icu_total) * 100, 100)}%` }}
-                                        ></div>
-                                    </div>
-                                </div>
-                                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                                    <div className="text-xs font-semibold text-slate-500 uppercase mb-1">Staff on Duty</div>
-                                    <div className="text-2xl font-bold text-slate-800">{data.summary.staff_on_duty}</div>
-                                </div>
-                            </div>
-
-                            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
-                                <div className="flex justify-between items-center">
-                                    <span className="text-sm font-medium text-slate-600">Oxygen Status</span>
-                                    <StatusBadge status={data.summary.oxygen_status} />
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-sm font-medium text-slate-600">Medicine Status</span>
-                                    <StatusBadge status={data.summary.medicine_status} />
-                                </div>
-                            </div>
-
-                            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-                                <div className="flex items-center gap-3 text-slate-500 mb-2">
-                                    <Users size={20} /> <span className="text-sm font-semibold">Predicted Arrivals</span>
-                                </div>
-                                <div className="text-3xl font-bold">{data.summary.predicted_visits} <span className="text-sm font-normal text-slate-400">Patients</span></div>
-                            </div>
                         </div>
 
                         {/* Feature 1 & 2: Forecasting Chart */}
@@ -195,7 +229,7 @@ export default function Dashboard() {
                     </div>
 
                     {/* THIRD ROW: Feature 5: Actionable Recommendations */}
-                    <RecommendationBox recommendations={data.recommendations} alertLevel={data.summary.alert_level} />
+                    {/* Moved to top as per user request */}
                 </main>
             </div>
         </ProtectedRoute>

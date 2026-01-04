@@ -5,7 +5,7 @@ Redis-ready - can swap implementation without changing interface.
 """
 
 from typing import Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from app.models.cached_data import CachedData
 import logging
@@ -33,10 +33,17 @@ class CacheService:
         Returns:
             Cached value dict if found and valid, None otherwise
         """
+        now = datetime.now(timezone.utc)
+        
         # Check in-memory cache first
         if key in self._memory_cache:
             entry = self._memory_cache[key]
-            if entry['expires_at'] > datetime.utcnow():
+            # Ensure entry['expires_at'] is aware
+            expires_at = entry['expires_at']
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+                
+            if expires_at > now:
                 logger.info(f"Cache HIT (memory): {key}")
                 return entry['value']
             else:
@@ -46,18 +53,24 @@ class CacheService:
         # Check database cache
         cached = db.query(CachedData).filter(CachedData.cache_key == key).first()
         
-        if cached and cached.expires_at > datetime.utcnow():
-            logger.info(f"Cache HIT (database): {key}")
-            # Populate memory cache for next time
-            self._memory_cache[key] = {
-                'value': cached.cache_value,
-                'expires_at': cached.expires_at
-            }
-            return cached.cache_value
-        elif cached:
-            # Expired entry in database, delete it
-            db.delete(cached)
-            db.commit()
+        if cached:
+            # Ensure cached.expires_at is aware
+            expires_at = cached.expires_at
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+            
+            if expires_at > now:
+                logger.info(f"Cache HIT (database): {key}")
+                # Populate memory cache for next time
+                self._memory_cache[key] = {
+                    'value': cached.cache_value,
+                    'expires_at': expires_at
+                }
+                return cached.cache_value
+            else:
+                # Expired entry in database, delete it
+                db.delete(cached)
+                db.commit()
         
         logger.info(f"Cache MISS: {key}")
         return None
@@ -72,7 +85,7 @@ class CacheService:
             ttl_seconds: Time-to-live in seconds
             db: Database session
         """
-        expires_at = datetime.utcnow() + timedelta(seconds=ttl_seconds)
+        expires_at = datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds)
         
         # Store in memory
         self._memory_cache[key] = {
@@ -125,8 +138,9 @@ class CacheService:
         Args:
             db: Database session
         """
+        now = datetime.now(timezone.utc)
         expired_count = db.query(CachedData).filter(
-            CachedData.expires_at <= datetime.utcnow()
+            CachedData.expires_at <= now
         ).delete()
         db.commit()
         
