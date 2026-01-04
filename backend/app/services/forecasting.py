@@ -1,118 +1,164 @@
-import pandas as pd
-import numpy as np
-import sys
-from pathlib import Path
+"""
+Updated Forecasting Service - Orchestrates All Components.
 
-# Robust import to handle both package and script execution
-try:
-    from ..models.emergency_model import EmergencyModel
-except ImportError:
-    # If running directly or path not set correctly
-    file_path = Path(__file__).resolve()
-    # Go up to 'backend' directory
-    root_path = file_path.parent.parent.parent
-    if str(root_path) not in sys.path:
-        sys.path.append(str(root_path))
-    from app.models.emergency_model import EmergencyModel
+CLEAN ARCHITECTURE:
+1. Feature Assembly (feature_assembly.py)
+2. ML Inference (predictor.py) → ONLY returns numbers
+3. Decision Logic (decision_logic.py) → Derives risk_level, resources
+4. Reason Engine (reason_engine.py) → Traceable explanations
+5. Database Persistence
+"""
+
+import pandas as pd
+from datetime import date as Date
+from sqlalchemy.orm import Session
+import logging
+
+from app.models.emergency_model import EmergencyModel
+from app.models.prediction import Prediction
+from app.services.feature_assembly import feature_assembler
+from app.services.predictor import PredictorService
+from app.services.decision_logic import DecisionLogic
+from app.services.reason_engine import ExplanationEngine
+
+logger = logging.getLogger(__name__)
+
 
 class ForecastService:
-    def __init__(self):
-        # Initialize the Multi-Output Model
-        self.model = EmergencyModel()
+    """
+    Master orchestrator for prediction pipeline.
+    Coordinates: Feature Assembly → ML → Decisions → Explanations → Persistence
+    """
+    
+    def __init__(self, global_model: EmergencyModel = None):
+        """
+        Initialize with globally loaded ML model.
         
-    def get_predictions_and_resources(self, hospital_data, backend_context):
+        Args:
+            global_model: ML model loaded at startup (or None)
         """
-        Main engine that glues Internal + External data, gets ML deltas,
-        and computes exact resource numbers.
+        self.predictor = PredictorService(global_model)
+    
+    async def assemble_backend_context(self, db: Session) -> dict:
         """
-        # 1. Construct the exact 11-feature vector required by the ML Contract
-        feature_vector = {
-            "icu_occupancy_pct": hospital_data['icu_occupied'] / hospital_data['icu_total'],
-            "staff_on_duty": hospital_data['staff_on_duty'],
-            "oxygen_low": 1 if hospital_data['oxygen_status'] == 'low' else 0,
-            "medicine_low": 1 if hospital_data['medicine_status'] == 'low' else 0,
+        Assemble backend-only enrichment data.
+        
+        Returns:
+            Weather + calendar + seasonal context
+        """
+        weather = await feature_assembler.enrich_weather(db)
+        calendar = await feature_assembler.enrich_calendar(db)
+        seasonal = await feature_assembler.enrich_seasonal(db)
+        
+        return {**weather, **calendar, **seasonal}
+    
+    async def get_predictions_and_resources(
+        self, 
+        hospital_data: dict, 
+        backend_context: dict,
+        hospital_id: int,
+        db: Session
+    ) -> dict:
+        """
+        MASTER PIPELINE:
+        
+        1. Feature Assembly & Validation
+        2. Pure ML Inference (numbers only)
+        3. Backend Decision Logic (risk_level, resources)
+        4. Traceable Reason Generation
+        5. Protocol-Based Recommendations
+        6. Database Persistence
+        7. API Response
+        
+        Args:
+            hospital_data: Hospital metrics
+            backend_context: External enrichment
+            hospital_id: Hospital ID
+            db: Database session
             
-            "temp_max": backend_context['temp_max'],
-            "rain_mm": backend_context['rain_mm'],
-            "weather_severity": backend_context['weather_severity'],
-            "is_weekend": backend_context['is_weekend'],
-            "is_festival": backend_context['is_festival'],
-            "seasonal_illness_weight": backend_context['seasonal_illness_weight']
-        }
+        Returns:
+            Complete prediction response with explanations
+        """
         
-        # 2. ML Inference (Returns Risk Score and % Increase Deltas)
-        # We wrap in a DataFrame because Scikit-learn expects 2D input
-        df_vector = pd.DataFrame([feature_vector])
-        ml_output = self.model.predict(df_vector)
+        # STEP 1: Feature Assembly
+        combined_data = {**hospital_data, **backend_context}
+        feature_vector = await feature_assembler.assemble_features(combined_data, db)
+        feature_dict = feature_vector.to_dict(orient='records')[0]
         
-        # 3. Decision Logic (Backend Calculation of Resource Numbers)
+        logger.info(f"✅ Features assembled: {feature_vector.shape}")
         
-        # BEDS: Total ICU Capacity * Expected ICU Increase %
-        additional_beds = np.ceil(
-            hospital_data['icu_total'] * ml_output['expected_icu_increase_pct']
+        # STEP 2: Pure ML Inference (ONLY NUMBERS)
+        ml_predictions = self.predictor.predict(feature_vector)
+        
+        # STEP 3: Backend Decision Logic
+        decisions = DecisionLogic.derive_all_decisions(
+            ml_predictions,
+            hospital_data
         )
         
-        # STAFF: (New Total Patients / Ratio) - Current Staff
-        # Standard clinical ratio: 1 staff per 10 patients
-        total_expected_patients = hospital_data['daily_patients'] * (1 + ml_output['expected_er_increase_pct'])
-        ideal_staff_count = np.ceil(total_expected_patients / 10)
-        additional_staff = ideal_staff_count - hospital_data['staff_on_duty']
+        # STEP 4-5: Traceable Explanations
+        explanation = ExplanationEngine.generate_explanation(
+            feature_dict,
+            hospital_data,
+            backend_context,
+            ml_predictions,
+            decisions
+        )
         
-        # 4. Final Risk Categorization (Feature 4)
-        risk_score = ml_output['risk_score']
-        if risk_score > 0.75:
-            alert = "Critical"
-        elif risk_score > 0.50:
-            alert = "High"
-        elif risk_score > 0.30:
-            alert = "Elevated"
+        # STEP 6: Database Persistence
+        today = Date.today()
+        existing = db.query(Prediction).filter(
+            Prediction.hospital_id == hospital_id,
+            Prediction.date == today
+        ).first()
+        
+        if existing:
+            # Update
+            existing.risk_score = ml_predictions["risk_score"]
+            existing.er_surge_pct = ml_predictions["expected_er_increase_pct"]
+            existing.icu_surge_pct = ml_predictions["expected_icu_increase_pct"]
+            existing.risk_level = decisions["risk_level"]
+            existing.additional_icu_beds = decisions["additional_icu_beds"]
+            existing.additional_staff = decisions["additional_staff"]
+            existing.supply_status = decisions["supply_status"]
+            existing.input_features = feature_dict
+            existing.is_fallback = 1 if ml_predictions.get("is_fallback") else 0
         else:
-            alert = "Normal"
-
-        # 5. Build Final Response for Frontend
+            # Create
+            new_pred = Prediction(
+                hospital_id=hospital_id,
+                date=today,
+                risk_score=ml_predictions["risk_score"],
+                er_surge_pct=ml_predictions["expected_er_increase_pct"],
+                icu_surge_pct=ml_predictions["expected_icu_increase_pct"],
+                risk_level=decisions["risk_level"],
+                additional_icu_beds=decisions["additional_icu_beds"],
+                additional_staff=decisions["additional_staff"],
+                supply_status=decisions["supply_status"],
+                input_features=feature_dict,
+                is_fallback=1 if ml_predictions.get("is_fallback") else 0
+            )
+            db.add(new_pred)
+        
+        db.commit()
+        logger.info(f"✅ Saved: hospital_id={hospital_id}, risk={decisions['risk_level']}")
+        
+        # STEP 7: API Response (Original Contract + Explanations)
         return {
             "risk_analysis": {
-                "score": round(risk_score * 100, 1),
-                "alert_level": alert,
-                "er_surge_prediction": f"+{round(ml_output['expected_er_increase_pct'] * 100, 1)}%",
-                "icu_surge_prediction": f"+{round(ml_output['expected_icu_increase_pct'] * 100, 1)}%"
+                "score": round(ml_predictions["risk_score"] * 100, 1),
+                "alert_level": decisions["risk_level"],
+                "er_surge_prediction": f"+{round(ml_predictions['expected_er_increase_pct'] * 100, 1)}%",
+                "icu_surge_prediction": f"+{round(ml_predictions['expected_icu_increase_pct'] * 100, 1)}%"
             },
             "resource_requirements": {
-                "beds_to_prepare": int(max(0, additional_beds)),
-                "staff_to_summon": int(max(0, additional_staff)),
-                "supply_alert": "Low" if (ml_output['expected_er_increase_pct'] > 0.2 and hospital_data['oxygen_status'] == 'low') else "Stable"
+                "beds_to_prepare": decisions["additional_icu_beds"],
+                "staff_to_summon": decisions["additional_staff"],
+                "supply_alert": decisions["supply_status"]
             },
-            "recommendations": self.get_recommendations(alert)
+            "recommendations": explanation["recommendations"],
+            "explanation": {
+                "reasons": explanation["reasons"],
+                "summary": explanation["summary"]
+            }
         }
-
-    def get_recommendations(self, alert_level):
-        """
-        FEATURE 5: Mapping Alert Levels to Protocol-Based Actions
-        """
-        recs = {
-            "Critical": [
-                "URGENT: Activate Surge Staffing (Level 3)",
-                "Immediately divert non-critical ambulances",
-                "Suspend all elective surgeries for 48 hours",
-                "Open emergency overflow wards"
-            ],
-            "High": [
-                "Call in on-call nursing staff",
-                "Expedite discharge for medically fit patients",
-                "Prioritize ICU bed turnaround",
-                "Review oxygen and PPE inventory levels"
-            ],
-            "Elevated": [
-                "Monitor ICU bed availability every 2 hours",
-                "Brief shift leads on expected intake increase",
-                "Ensure trauma units are on standby",
-                "Conduct routine equipment checks"
-            ],
-            "Normal": [
-                "Standard shift rotations",
-                "Routine maintenance and equipment checks",
-                "No change to elective schedules",
-                "Maintain standard community health monitoring"
-            ]
-        }
-        return recs.get(alert_level, ["Continue standard monitoring"])

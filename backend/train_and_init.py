@@ -1,9 +1,13 @@
+"""
+Updated training initialization script with 11-feature contract.
+"""
+
 import sys
 from pathlib import Path
 
 # Ensure paths are set up correctly
-base_dir = Path(__file__).resolve().parent
-sys.path.append(str(base_dir))
+backend_dir = Path(__file__).resolve().parent
+sys.path.append(str(backend_dir))
 
 # Import specific modules
 try:
@@ -11,16 +15,16 @@ try:
     from app.utils.preprocessing import DataPreprocessor
 except ImportError:
     # Fallback to local import if structure differs
-    sys.path.append(str(base_dir.parent))
+    sys.path.append(str(backend_dir.parent))
     from app.models.emergency_model import EmergencyModel
     from app.utils.preprocessing import DataPreprocessor
 
 if __name__ == "__main__":
-    print("--- Starting Backend Initialization ---")
+    print("--- Starting Backend Initialization (11-Feature Contract) ---")
     
     # 1. Define Paths
-    raw_data_path = base_dir / 'data' / 'raw' / 'enhanced_hospital_data.csv'
-    processed_data_path = base_dir / 'data' / 'processed' / 'enhanced_processed_hospital_data.csv'
+    raw_data_path = backend_dir / 'data' / 'raw' / 'enhanced_hospital_data.csv'
+    processed_data_path = backend_dir / 'data' / 'processed' / 'enhanced_processed_hospital_data.csv'
     
     # Ensure directories exist
     raw_data_path.parent.mkdir(parents=True, exist_ok=True)
@@ -31,7 +35,7 @@ if __name__ == "__main__":
     if not processed_data_path.exists():
         print("Processed data not found. Running Data Preprocessor...")
         
-        # Create a dummy raw file if it doesn't exist, just to satisfy the preprocessor
+        # Create a dummy raw file if it doesn't exist, just to bootstrap the system
         if not raw_data_path.exists():
             print("Creating dummy raw data to bootstrap the system...")
             import pandas as pd
@@ -50,6 +54,8 @@ if __name__ == "__main__":
         model = EmergencyModel()
         model.train(str(processed_data_path))
         print("✅ Model training completed successfully!")
+        print(f"✅ ML Contract: 11 features → 3 numeric outputs")
+        print(f"✅ Features: {', '.join(model.FEATURE_CONTRACT)}")
     except Exception as e:
         print(f"❌ Model training failed: {e}")
         import traceback
